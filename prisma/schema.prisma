@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+ url      = env("DATABASE_URL")
+}
+
+// Här börjar din SoundStage-struktur:
+
+model Board {
+  id        String   @id @default(cuid())
+  title     String   // T.ex. "Album: Sommar 2026"
+  createdAt DateTime @default(now())
+  lists     Stage[]  // "Skiss", "Mix", "Master"
+}
+
+model Stage {
+  id      String  @id @default(cuid())
+  title   String  // Namnet på stadiet
+  order   Int
+  boardId String
+  board   Board   @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  tracks  Track[]
+}
+
+model Track {
+  id          String  @id @default(cuid())
+  title       String  // Låtens namn
+  audioUrl    String? // Länk till mp3-filen i Supabase Storage
+  bpm         Int?
+  key         String?
+  notes       String? // Feedback eller att-göra för mixen
+  order       Int
+  stageId     String
+  stage       Stage   @relation(fields: [stageId], references: [id], onDelete: Cascade)
+}
