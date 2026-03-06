@@ -21,7 +21,7 @@ export default function TrackCard({ title, bpm, keySig }: TrackProps) {
         </button>
       </div>
 
-      <h3 className='text-zinc-100 font-bold text-sm tracking-tight mb-3 truncate uppercase'>
+      <h3 className='text-zinc-100 font-bold text-sm tracking-tight mb-3 truncate'>
         {title}
       </h3>
 
