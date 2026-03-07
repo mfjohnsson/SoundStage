@@ -19,25 +19,29 @@ export function SortableTrack({ track }: SortableTrackProps) {
   } = useSortable({ id: track.id });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform), // Ändrade från Transform till Translate för mjukare flytt
     transition,
-    opacity: isDragging ? 0.5 : 1,
-    cursor: 'grab',
+    opacity: isDragging ? 0.3 : 1, // Sänkte opacity lite mer vid drag
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className='touch-none' // Viktigt för mobil/touch-enheter
+      className={`touch-none outline-none ${isDragging ? 'z-50' : 'z-0'}`}
     >
-      <TrackCard
-        title={track.title}
-        bpm={track.bpm ?? undefined}
-        keySig={track.key ?? undefined}
-      />
+      <div
+        {...attributes}
+        {...listeners}
+        className='cursor-grab active:cursor-grabbing'
+      >
+        <TrackCard
+          id={track.id}
+          title={track.title}
+          bpm={track.bpm ?? undefined}
+          keySig={track.key ?? undefined}
+        />
+      </div>
     </div>
   );
 }

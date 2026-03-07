@@ -40,3 +40,49 @@ export async function updateTrackPosition(trackId: string, newStageId: string) {
     console.error('Failed to update position:', error);
   }
 }
+
+export async function deleteTrack(id: string) {
+  await db.track.delete({
+    where: { id },
+  });
+
+  revalidatePath('/');
+}
+
+export async function updateTrack(id: string, formData: FormData) {
+  const title = formData.get('title') as string;
+  const bpm = formData.get('bpm')
+    ? parseInt(formData.get('bpm') as string)
+    : null;
+  const key = formData.get('key') as string;
+
+  await db.track.update({
+    where: { id },
+    data: {
+      title,
+      bpm,
+      key,
+    },
+  });
+
+  revalidatePath('/');
+}
+
+export async function updateTracksOrder(
+  tracks: { id: string; order: number }[],
+) {
+  try {
+    // Vi kör alla uppdateringar i en "transaction" så att allt händer samtidigt
+    await db.$transaction(
+      tracks.map((track) =>
+        db.track.update({
+          where: { id: track.id },
+          data: { order: track.order },
+        }),
+      ),
+    );
+    revalidatePath('/');
+  } catch (error) {
+    console.error('Failed to update order:', error);
+  }
+}
