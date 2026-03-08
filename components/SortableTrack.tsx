@@ -36,10 +36,12 @@ export function SortableTrack({ track }: SortableTrackProps) {
         className='cursor-grab active:cursor-grabbing'
       >
         <TrackCard
+          key={track.id}
           id={track.id}
           title={track.title}
           bpm={track.bpm ?? undefined}
           keySig={track.key ?? undefined}
+          audioUrl={track.audioUrl}
         />
       </div>
     </div>
