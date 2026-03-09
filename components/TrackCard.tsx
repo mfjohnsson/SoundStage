@@ -4,8 +4,6 @@
 
 import { useEffect, useState, useRef } from 'react';
 import {
-  Play,
-  Pause,
   Upload,
   MoreVertical,
   Music,
@@ -16,6 +14,7 @@ import {
 } from 'lucide-react';
 import { deleteTrack, updateTrack } from '@/actions/tracks';
 import UploadTrackModal from './UploadTrackModal';
+import AudioPlayer from './AudioPlayer';
 
 interface TrackProps {
   id: string;
@@ -35,9 +34,7 @@ export default function TrackCard({
   const [showMenu, setShowMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Stäng menyn vid klick utanför
@@ -66,23 +63,6 @@ export default function TrackCard({
     await updateTrack(id, formData);
     setIsEditing(false);
     setShowMenu(false);
-  };
-
-  const togglePlay = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!audioUrl) return;
-
-    if (!audioRef.current) {
-      audioRef.current = new Audio(audioUrl);
-      audioRef.current.onended = () => setIsPlaying(false);
-    }
-
-    if (isPlaying) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
-    }
-    setIsPlaying(!isPlaying);
   };
 
   if (isEditing) {
@@ -208,17 +188,9 @@ export default function TrackCard({
         )}
       </div>
 
-      <button
-        onClick={togglePlay}
-        className='w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-accent hover:text-black text-zinc-300 py-2 rounded text-xs font-bold transition-all uppercase tracking-widest'
-      >
-        {isPlaying ? (
-          <Pause className='w-3 h-3 fill-current' />
-        ) : (
-          <Play className='w-3 h-3 fill-current' />
-        )}
-        {isPlaying ? 'Pause' : 'Play Track'}
-      </button>
+      <div className='mt-auto'>
+        <AudioPlayer src={audioUrl || ''} trackId={id} />
+      </div>
 
       {isUploadOpen && (
         <UploadTrackModal

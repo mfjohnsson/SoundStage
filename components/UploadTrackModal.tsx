@@ -2,8 +2,9 @@
 
 import { createTrack, uploadAudio } from '@/actions/tracks';
 import { X, Loader2 } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useFormStatus } from 'react-dom'; // Importera denna för stabil laddningsstatus
+import { createPortal } from 'react-dom';
 
 interface Props {
   stageId?: string;
@@ -35,15 +36,16 @@ function SubmitButton() {
 
 export default function UploadTrackModal({ stageId, trackId, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
-  const modalRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (modalRef.current === e.target) {
-      onClose();
-    }
-  };
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
 
-  // Vi använder en "Client Action" för att hantera stängning och fel
   async function clientAction(formData: FormData) {
     setError(null);
     try {
@@ -62,17 +64,27 @@ export default function UploadTrackModal({ stageId, trackId, onClose }: Props) {
     }
   }
 
-  return (
+  return createPortal(
     <div
-      ref={modalRef}
-      onClick={handleBackdropClick}
-      className='fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-100 p-4 font-sans'
+      ref={backdropRef}
+      // STOPPA DND: Vi använder onPointerDown för att fånga klicket innan dnd-kit gör det
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        if (e.target === backdropRef.current) {
+          onClose();
+        }
+      }}
+      // Förhindra alla mus-events från att nå Board
+      onMouseDown={(e) => e.stopPropagation()}
+      onMouseUp={(e) => e.stopPropagation()}
+      className='fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-9999 p-4 font-sans'
+      style={{ pointerEvents: 'auto' }}
     >
       <div
         className='bg-zinc-900 border border-accent/30 p-6 rounded-xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200'
-        onClick={(e) => e.stopPropagation()} // Hindra klick inuti modalen från att stänga den
+        // Inuti boxen ska klick inte stänga modalen
+        onPointerDown={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className='flex justify-between items-center mb-6'>
           <span className='text-[10px] text-accent font-black tracking-widest uppercase'>
             {trackId ? 'Upload Audio' : 'Create New Track'}
@@ -135,10 +147,10 @@ export default function UploadTrackModal({ stageId, trackId, onClose }: Props) {
             </p>
           )}
 
-          {/* Använd den nya SubmitButton-komponenten här */}
           <SubmitButton />
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
