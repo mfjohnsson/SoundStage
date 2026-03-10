@@ -1,14 +1,18 @@
 'use client';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Track } from '@prisma/client';
+import { AudioTrack } from '@/context/AudioContext';
 import TrackCard from './TrackCard';
 
 interface SortableTrackProps {
-  track: Track;
+  track: AudioTrack; // Ändra från Track till AudioTrack
+  allTracksInColumn: AudioTrack[]; // Ändra här också
 }
 
-export function SortableTrack({ track }: SortableTrackProps) {
+export function SortableTrack({
+  track,
+  allTracksInColumn,
+}: SortableTrackProps) {
   const {
     attributes,
     listeners,
@@ -28,7 +32,7 @@ export function SortableTrack({ track }: SortableTrackProps) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`touch-none outline-none ${isDragging ? 'z-50' : 'z-0'}`}
+      className={`touch-none outline-none ${isDragging ? 'z-50 relative' : ''}`}
     >
       <div
         {...attributes}
@@ -42,6 +46,7 @@ export function SortableTrack({ track }: SortableTrackProps) {
           bpm={track.bpm ?? undefined}
           keySig={track.key ?? undefined}
           audioUrl={track.audioUrl}
+          allTracksInColumn={allTracksInColumn}
         />
       </div>
     </div>

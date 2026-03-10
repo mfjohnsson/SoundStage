@@ -6,7 +6,6 @@ import {
   DragOverEvent,
   DragEndEvent,
   closestCenter,
-  useDroppable,
   pointerWithin,
   KeyboardSensor,
   PointerSensor,
@@ -24,7 +23,8 @@ import { FullBoard } from '@/types';
 import { SortableTrack } from './SortableTrack';
 import AddTrack from './AddTrack';
 import { updateTrackPosition, updateTracksOrder } from '@/actions/tracks';
-import { Track } from '@prisma/client';
+// Importera helpern här
+import { mapToAudioTrack } from '@/context/AudioContext';
 
 export default function Board({ initialData }: { initialData: FullBoard }) {
   const [board, setBoard] = useState(initialData);
@@ -40,9 +40,7 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5, // Lite känsligare distans för snabbare respons
-      },
+      activationConstraint: { distance: 5 },
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -51,11 +49,7 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
 
   const handleCollision: CollisionDetection = (args) => {
     const pointerCollisions = pointerWithin(args);
-
-    // Om vi är över något, prioritera det
     if (pointerCollisions.length > 0) return pointerCollisions;
-
-    // Annars, använd center-punkten för att hitta rätt kolumn
     return closestCenter(args);
   };
 
@@ -69,10 +63,9 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
     const overId = over.id as string;
 
     const activeList = board.lists.find((l) =>
-      l.tracks.some((t: Track) => t.id === activeId),
+      l.tracks.some((t) => t.id === activeId),
     );
 
-    // Hitta listan man hovrar över (antingen via lista-ID eller track-ID)
     const overList =
       board.lists.find((l) => l.id === overId) ||
       board.lists.find((l) => l.tracks.some((t) => t.id === overId));
@@ -80,14 +73,12 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
     if (!activeList || !overList || activeList.id === overList.id) return;
 
     setBoard((prev) => {
-      const activeTrack = activeList.tracks.find(
-        (t: Track) => t.id === activeId,
-      )!;
-      const isOverATrack = overList.tracks.some((t: Track) => t.id === overId);
+      const activeTrack = activeList.tracks.find((t) => t.id === activeId)!;
+      const isOverATrack = overList.tracks.some((t) => t.id === overId);
 
       let newIndex = overList.tracks.length;
       if (isOverATrack) {
-        newIndex = overList.tracks.findIndex((t: Track) => t.id === overId);
+        newIndex = overList.tracks.findIndex((t) => t.id === overId);
       }
 
       return {
@@ -96,7 +87,7 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
           if (list.id === activeList.id) {
             return {
               ...list,
-              tracks: list.tracks.filter((t: Track) => t.id !== activeId),
+              tracks: list.tracks.filter((t) => t.id !== activeId),
             };
           }
           if (list.id === overList.id) {
@@ -112,7 +103,6 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
       };
     });
 
-    // Uppdatera DB när vi byter kolumn
     await updateTrackPosition(activeId, overList.id);
   };
 
@@ -124,18 +114,16 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
     const overId = over.id as string;
 
     const list = board.lists.find((l) =>
-      l.tracks.some((t: Track) => t.id === activeId),
+      l.tracks.some((t) => t.id === activeId),
     );
 
     if (list) {
-      const oldIndex = list.tracks.findIndex((t: Track) => t.id === activeId);
-      const newIndex = list.tracks.findIndex((t: Track) => t.id === overId);
+      const oldIndex = list.tracks.findIndex((t) => t.id === activeId);
+      const newIndex = list.tracks.findIndex((t) => t.id === overId);
 
       if (oldIndex !== newIndex && newIndex !== -1) {
-        // 1. Skapa den nya ordningen lokalt först
         const newTracks = arrayMove(list.tracks, oldIndex, newIndex);
 
-        // 2. Uppdatera det du ser på skärmen (UI)
         setBoard((prev) => ({
           ...prev,
           lists: prev.lists.map((l) => {
@@ -146,48 +134,15 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
           }),
         }));
 
-        // 3. Förbered listan för databasen
-        // Vi mappar om låtarna så att varje ID får ett nytt "order"-nummer (0, 1, 2...)
         const orderUpdates = newTracks.map((track, index) => ({
           id: track.id,
           order: index,
         }));
 
-        // 4. Skicka till servern (denna action skapade vi i förra steget)
         await updateTracksOrder(orderUpdates);
       }
     }
   };
-
-  // En enkel wrapper för att göra ytan "känslig" för drops
-  function DroppableContainer({
-    id,
-    children,
-    tracksCount,
-  }: {
-    id: string;
-    children: React.ReactNode;
-    tracksCount: number;
-  }) {
-    const { setNodeRef } = useDroppable({ id });
-
-    return (
-      <div
-        ref={setNodeRef}
-        id={id}
-        className={`flex flex-col gap-4 transition-colors ${tracksCount === 0 ? 'min-h-25 border-2 border-dashed border-white/5 rounded-xl p-4' : ''}`}
-      >
-        {children}
-        {tracksCount === 0 && (
-          <div className='flex-1 flex items-center justify-center pointer-events-none'>
-            <span className='text-[10px] text-zinc-700 uppercase tracking-widest'>
-              Drop here
-            </span>
-          </div>
-        )}
-      </div>
-    );
-  }
 
   return (
     <DndContext
@@ -197,41 +152,48 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
       onDragEnd={handleDragEnd}
     >
       <div className='flex gap-8 h-full items-start'>
-        {board.lists.map((stage) => (
-          <section
-            key={stage.id}
-            className='w-80 shrink-0 bg-zinc-900/20 p-4 rounded-xl border border-white/5 flex flex-col'
-          >
-            <div className='flex items-center justify-between mb-6 border-b border-white/5 pb-2'>
-              <h2 className='text-[11px] uppercase tracking-[0.4em] text-zinc-400 font-black'>
-                {stage.title}
-              </h2>
-              <span className='text-[10px] font-mono text-zinc-600 bg-black/40 px-2 py-0.5 rounded'>
-                {stage.tracks.length}
-              </span>
-            </div>
+        {board.lists.map((stage) => {
+          // Konvertera alla tracks i kolumnen till AudioTrack-formatet EN gång här
+          const columnAudioTracks = stage.tracks.map(mapToAudioTrack);
 
-            <SortableContext
-              id={stage.id}
-              items={stage.tracks.map((t: Track) => t.id)}
-              strategy={verticalListSortingStrategy}
+          return (
+            <section
+              key={stage.id}
+              className='w-80 shrink-0 bg-zinc-900/20 p-4 rounded-xl border border-white/5 flex flex-col'
             >
-              <DroppableContainer
-                id={stage.id}
-                tracksCount={stage.tracks.length}
-              >
-                {/* 1. Riktiga tracks */}
-                {stage.tracks.map((track: Track) => (
-                  <SortableTrack key={track.id} track={track} />
-                ))}
-              </DroppableContainer>
-            </SortableContext>
+              <div className='flex items-center justify-between mb-6 border-b border-white/5 pb-2'>
+                <h2 className='text-[11px] uppercase tracking-[0.4em] text-zinc-400 font-black'>
+                  {stage.title}
+                </h2>
+                <span className='text-[10px] font-mono text-zinc-600 bg-black/40 px-2 py-0.5 rounded'>
+                  {stage.tracks.length}
+                </span>
+              </div>
 
-            <div className='mt-4'>
-              <AddTrack stageId={stage.id} />
-            </div>
-          </section>
-        ))}
+              <SortableContext
+                id={stage.id}
+                items={stage.tracks.map((t) => t.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div
+                  className={`flex flex-col gap-4 ${stage.tracks.length === 0 ? 'min-h-25 ...' : ''}`}
+                >
+                  {stage.tracks.map((track) => (
+                    <SortableTrack
+                      key={track.id}
+                      track={mapToAudioTrack(track)}
+                      allTracksInColumn={columnAudioTracks}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+
+              <div className='mt-4'>
+                <AddTrack stageId={stage.id} />
+              </div>
+            </section>
+          );
+        })}
       </div>
     </DndContext>
   );
