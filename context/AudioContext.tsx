@@ -102,13 +102,16 @@ export function AudioProvider({ children }: { children: ReactNode }) {
 
       audioRef.current.play();
       setIsPlaying(true);
+      navigator.mediaSession.playbackState = 'playing';
     },
     [currentTrack?.id],
   ); // Beror bara på om ID:t ändras
 
   const pauseTrack = () => {
+    // I pauseTrack
     audioRef.current?.pause();
     setIsPlaying(false);
+    navigator.mediaSession.playbackState = 'paused';
   };
 
   const togglePlay = () => {
@@ -164,17 +167,44 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     }
   }, [currentTrack, playlist, playTrack, seek]);
 
+  // Kontroll för media-knapparna på tangentbordet (⏮ ⏯ ⏭)
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    if (!currentTrack) return;
 
-    const handleEnded = () => {
-      playNext();
-    };
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: currentTrack.title,
+      artist: currentTrack.bpm ? `${currentTrack.bpm} BPM` : undefined,
+    });
 
-    audio.addEventListener('ended', handleEnded);
-    return () => audio.removeEventListener('ended', handleEnded);
-  }, [playNext]);
+    navigator.mediaSession.setActionHandler('play', () => {
+      audioRef.current?.play();
+      setIsPlaying(true);
+      navigator.mediaSession.playbackState = 'playing';
+    });
+    navigator.mediaSession.setActionHandler('pause', () => {
+      audioRef.current?.pause();
+      setIsPlaying(false);
+      navigator.mediaSession.playbackState = 'paused';
+    });
+    navigator.mediaSession.setActionHandler('nexttrack', playNext);
+    navigator.mediaSession.setActionHandler('previoustrack', playPrevious);
+  }, [currentTrack, playNext, playPrevious]); // Ta bort duration och progress härifrån
+
+  // Separat effect för position – kör ofta men kraschar inte handlers
+  useEffect(() => {
+    if (!duration || !isFinite(duration) || duration <= 0) return;
+    const safeProgress = Math.min(progress, duration);
+
+    try {
+      navigator.mediaSession.setPositionState({
+        duration,
+        playbackRate: 1,
+        position: safeProgress,
+      });
+    } catch {
+      // Ignorera – kan ske vid låtbyte
+    }
+  }, [progress, duration]);
 
   return (
     <AudioContext.Provider

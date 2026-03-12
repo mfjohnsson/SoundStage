@@ -23,8 +23,9 @@ import {
 } from '@dnd-kit/sortable';
 import { FullBoard } from '@/types';
 import { SortableTrack } from './SortableTrack';
-import AddTrack from './AddTrack';
 import { updateTrackPosition, updateTracksOrder } from '@/actions/tracks';
+import { useAudio } from '@/context/AudioContext';
+import AddTrack from './AddTrack';
 import TrackCard from './TrackCard';
 import DroppableZone from './DroppableZone';
 
@@ -32,12 +33,36 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
   const [board, setBoard] = useState(initialData);
   const [mounted, setMounted] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const { currentTrack, setPlaylist } = useAudio();
 
   // Keep a ref to the latest board so async handlers read fresh data
   const boardRef = useRef(board);
   useEffect(() => {
     boardRef.current = board;
   });
+
+  useEffect(() => {
+    if (!currentTrack) return;
+
+    // Hitta vilken kolumn det aktiva spåret befinner sig i just nu
+    const currentList = board.lists.find((l) =>
+      l.tracks.some((t) => t.id === currentTrack.id),
+    );
+
+    if (currentList) {
+      const playableTracks = currentList.tracks
+        .filter((t) => t.audioUrl)
+        .map((t) => ({
+          id: t.id,
+          title: t.title,
+          bpm: t.bpm ?? undefined,
+          key: t.key ?? undefined,
+          audioUrl: t.audioUrl,
+        }));
+
+      setPlaylist(playableTracks);
+    }
+  }, [board, currentTrack, setPlaylist]); // Kör varje gång board ändras (dvs efter varje drag)
 
   useEffect(() => {
     setMounted(true);

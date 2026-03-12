@@ -13,7 +13,7 @@ model Board {
   id        String   @id @default(cuid())
   title     String   // T.ex. "Album: Sommar 2026"
   createdAt DateTime @default(now())
-  lists     Stage[]  // "Skiss", "Mix", "Master"
+  lists     Stage[]  // "Skiss", "Demo", "Mix", "Master"
 }
 
 model Stage {
