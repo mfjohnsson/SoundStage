@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
+  DragOverlay,
   DragOverEvent,
+  DragStartEvent,
   DragEndEvent,
   closestCenter,
   pointerWithin,
@@ -23,12 +25,19 @@ import { FullBoard } from '@/types';
 import { SortableTrack } from './SortableTrack';
 import AddTrack from './AddTrack';
 import { updateTrackPosition, updateTracksOrder } from '@/actions/tracks';
-// Importera helpern här
-import { mapToAudioTrack } from '@/context/AudioContext';
+import TrackCard from './TrackCard';
+import DroppableZone from './DroppableZone';
 
 export default function Board({ initialData }: { initialData: FullBoard }) {
   const [board, setBoard] = useState(initialData);
   const [mounted, setMounted] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Keep a ref to the latest board so async handlers read fresh data
+  const boardRef = useRef(board);
+  useEffect(() => {
+    boardRef.current = board;
+  });
 
   useEffect(() => {
     setMounted(true);
@@ -55,146 +64,176 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
 
   if (!mounted) return <div className='flex gap-8 h-full opacity-0' />;
 
-  const handleDragOver = async (event: DragOverEvent) => {
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  // Live preview while dragging – moves card optimistically so there's no flicker
+  const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
     if (!over) return;
 
     const activeId = active.id as string;
     const overId = over.id as string;
 
-    const activeList = board.lists.find((l) =>
-      l.tracks.some((t) => t.id === activeId),
-    );
-
-    const overList =
-      board.lists.find((l) => l.id === overId) ||
-      board.lists.find((l) => l.tracks.some((t) => t.id === overId));
-
-    if (!activeList || !overList || activeList.id === overList.id) return;
-
     setBoard((prev) => {
-      const activeTrack = activeList.tracks.find((t) => t.id === activeId)!;
-      const isOverATrack = overList.tracks.some((t) => t.id === overId);
+      const activeListIndex = prev.lists.findIndex((l) =>
+        l.tracks.some((t) => t.id === activeId),
+      );
+      if (activeListIndex === -1) return prev;
 
-      let newIndex = overList.tracks.length;
-      if (isOverATrack) {
-        newIndex = overList.tracks.findIndex((t) => t.id === overId);
-      }
+      // Target: either the list itself (drop on empty zone) or the list containing overId
+      const overListIndex = prev.lists.findIndex(
+        (l) => l.id === overId || l.tracks.some((t) => t.id === overId),
+      );
+      if (overListIndex === -1) return prev;
 
-      return {
-        ...prev,
-        lists: prev.lists.map((list) => {
-          if (list.id === activeList.id) {
-            return {
-              ...list,
-              tracks: list.tracks.filter((t) => t.id !== activeId),
-            };
-          }
-          if (list.id === overList.id) {
-            const newTracks = [...list.tracks];
-            newTracks.splice(newIndex, 0, {
-              ...activeTrack,
-              stageId: overList.id,
-            });
-            return { ...list, tracks: newTracks };
-          }
-          return list;
-        }),
-      };
+      // Same list – let SortableContext handle reordering; nothing to do here
+      if (activeListIndex === overListIndex) return prev;
+
+      // Moving between lists
+      const activeTrack = prev.lists[activeListIndex].tracks.find(
+        (t) => t.id === activeId,
+      )!;
+
+      const newLists = prev.lists.map((list, idx) => {
+        if (idx === activeListIndex) {
+          return {
+            ...list,
+            tracks: list.tracks.filter((t) => t.id !== activeId),
+          };
+        }
+        if (idx === overListIndex) {
+          // Insert before the card we're hovering, or append at end
+          const overTrackIndex = list.tracks.findIndex((t) => t.id === overId);
+          const insertAt =
+            overTrackIndex === -1 ? list.tracks.length : overTrackIndex;
+          const newTracks = [...list.tracks];
+          newTracks.splice(insertAt, 0, activeTrack);
+          return { ...list, tracks: newTracks };
+        }
+        return list;
+      });
+
+      return { ...prev, lists: newLists };
     });
-
-    await updateTrackPosition(activeId, overList.id);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
+    setActiveId(null);
+
     if (!over) return;
 
     const activeId = active.id as string;
     const overId = over.id as string;
 
-    const list = board.lists.find((l) =>
+    // Use fresh board state (after all dragOver updates)
+    const currentBoard = boardRef.current;
+
+    const activeList = currentBoard.lists.find((l) =>
       l.tracks.some((t) => t.id === activeId),
     );
+    if (!activeList) return;
 
-    if (list) {
-      const oldIndex = list.tracks.findIndex((t) => t.id === activeId);
-      const newIndex = list.tracks.findIndex((t) => t.id === overId);
+    // Handle reordering within the same list
+    const oldIndex = activeList.tracks.findIndex((t) => t.id === activeId);
+    let newIndex = activeList.tracks.findIndex((t) => t.id === overId);
 
-      if (oldIndex !== newIndex && newIndex !== -1) {
-        const newTracks = arrayMove(list.tracks, oldIndex, newIndex);
+    if (newIndex === -1) {
+      // Dropped on the column itself – move to end
+      newIndex = activeList.tracks.length - 1;
+    }
 
-        setBoard((prev) => ({
-          ...prev,
-          lists: prev.lists.map((l) => {
-            if (l.id === list.id) {
-              return { ...l, tracks: newTracks };
-            }
-            return l;
-          }),
-        }));
+    if (oldIndex !== newIndex) {
+      const newTracks = arrayMove(activeList.tracks, oldIndex, newIndex);
 
-        const orderUpdates = newTracks.map((track, index) => ({
-          id: track.id,
-          order: index,
-        }));
+      setBoard((prev) => ({
+        ...prev,
+        lists: prev.lists.map((l) =>
+          l.id === activeList.id ? { ...l, tracks: newTracks } : l,
+        ),
+      }));
 
-        await updateTracksOrder(orderUpdates);
-      }
+      await updateTracksOrder(
+        newTracks.map((track, index) => ({ id: track.id, order: index })),
+      );
+    }
+
+    // Always persist the list (stageId) the track ended up in
+    const originList = initialData.lists.find((l) =>
+      l.tracks.some((t) => t.id === activeId),
+    );
+    if (originList?.id !== activeList.id) {
+      await updateTrackPosition(activeId, activeList.id);
     }
   };
+
+  // Find the active track for the DragOverlay
+  const activeTrack = activeId
+    ? board.lists.flatMap((l) => l.tracks).find((t) => t.id === activeId)
+    : null;
 
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={handleCollision}
       onDragOver={handleDragOver}
+      onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
       <div className='flex gap-8 h-full items-start'>
-        {board.lists.map((stage) => {
-          // Konvertera alla tracks i kolumnen till AudioTrack-formatet EN gång här
-          const columnAudioTracks = stage.tracks.map(mapToAudioTrack);
+        {board.lists.map((stage) => (
+          <section
+            key={stage.id}
+            className='w-80 shrink-0 bg-zinc-900/20 p-4 rounded-xl border border-white/5 flex flex-col'
+          >
+            <div className='flex items-center justify-between mb-6 border-b border-white/5 pb-2'>
+              <h2 className='text-[11px] uppercase tracking-[0.4em] text-zinc-400 font-black'>
+                {stage.title}
+              </h2>
+              <span className='text-[10px] font-mono text-zinc-600 bg-black/40 px-2 py-0.5 rounded'>
+                {stage.tracks.length}
+              </span>
+            </div>
 
-          return (
-            <section
-              key={stage.id}
-              className='w-80 shrink-0 bg-zinc-900/20 p-4 rounded-xl border border-white/5 flex flex-col'
+            <SortableContext
+              id={stage.id}
+              items={stage.tracks.map((t) => t.id)}
+              strategy={verticalListSortingStrategy}
             >
-              <div className='flex items-center justify-between mb-6 border-b border-white/5 pb-2'>
-                <h2 className='text-[11px] uppercase tracking-[0.4em] text-zinc-400 font-black'>
-                  {stage.title}
-                </h2>
-                <span className='text-[10px] font-mono text-zinc-600 bg-black/40 px-2 py-0.5 rounded'>
-                  {stage.tracks.length}
-                </span>
-              </div>
+              <DroppableZone id={stage.id} tracksCount={stage.tracks.length}>
+                {stage.tracks.map((track) => (
+                  <SortableTrack
+                    key={track.id}
+                    track={track}
+                    allTracksInColumn={stage.tracks}
+                  />
+                ))}
+              </DroppableZone>
+            </SortableContext>
 
-              <SortableContext
-                id={stage.id}
-                items={stage.tracks.map((t) => t.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div
-                  className={`flex flex-col gap-4 ${stage.tracks.length === 0 ? 'min-h-25 ...' : ''}`}
-                >
-                  {stage.tracks.map((track) => (
-                    <SortableTrack
-                      key={track.id}
-                      track={mapToAudioTrack(track)}
-                      allTracksInColumn={columnAudioTracks}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-
-              <div className='mt-4'>
-                <AddTrack stageId={stage.id} />
-              </div>
-            </section>
-          );
-        })}
+            <div className='mt-4'>
+              <AddTrack stageId={stage.id} />
+            </div>
+          </section>
+        ))}
       </div>
+
+      <DragOverlay adjustScale={false} dropAnimation={null}>
+        {activeTrack ? (
+          <div className='opacity-90 rotate-1 scale-105 pointer-events-none'>
+            <TrackCard
+              id={activeTrack.id}
+              title={activeTrack.title}
+              bpm={activeTrack.bpm}
+              keySig={activeTrack.key}
+              audioUrl={activeTrack.audioUrl}
+              allTracksInColumn={[]}
+            />
+          </div>
+        ) : null}
+      </DragOverlay>
     </DndContext>
   );
 }

@@ -4,6 +4,10 @@ import { CSS } from '@dnd-kit/utilities';
 import { AudioTrack } from '@/context/AudioContext';
 import TrackCard from './TrackCard';
 
+function mapToAudioTrack(track: AudioTrack): AudioTrack {
+  return track;
+}
+
 interface SortableTrackProps {
   track: AudioTrack; // Ändra från Track till AudioTrack
   allTracksInColumn: AudioTrack[]; // Ändra här också
@@ -13,19 +17,16 @@ export function SortableTrack({
   track,
   allTracksInColumn,
 }: SortableTrackProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: track.id });
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useSortable({ id: track.id });
+
+  const audioTrack = mapToAudioTrack(track);
+  const audioColumn = allTracksInColumn.map(mapToAudioTrack);
 
   const style = {
-    transform: CSS.Translate.toString(transform), // Ändrade från Transform till Translate för mjukare flytt
-    transition,
-    opacity: isDragging ? 0.3 : 1, // Sänkte opacity lite mer vid drag
+    transform: CSS.Translate.toString(transform),
+    transition: 'none', // Ingen transition under aktiv drag
+    opacity: isDragging ? 0 : 1, // Helt osynlig – bara en tom plats kvar
   };
 
   return (
@@ -40,13 +41,12 @@ export function SortableTrack({
         className='cursor-grab active:cursor-grabbing'
       >
         <TrackCard
-          key={track.id}
-          id={track.id}
-          title={track.title}
-          bpm={track.bpm ?? undefined}
-          keySig={track.key ?? undefined}
-          audioUrl={track.audioUrl}
-          allTracksInColumn={allTracksInColumn}
+          id={audioTrack.id}
+          title={audioTrack.title}
+          bpm={audioTrack.bpm}
+          keySig={audioTrack.key}
+          audioUrl={audioTrack.audioUrl}
+          allTracksInColumn={audioColumn}
         />
       </div>
     </div>
