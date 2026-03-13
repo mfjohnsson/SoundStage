@@ -19,6 +19,10 @@ interface NavbarProps {
   activeBoard: Board;
 }
 
+function setLastBoardCookie(boardId: string) {
+  document.cookie = `lastBoardId=${boardId}; path=/; max-age=31536000`;
+}
+
 export default function Navbar({ boards, activeBoard }: NavbarProps) {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -29,6 +33,7 @@ export default function Navbar({ boards, activeBoard }: NavbarProps) {
 
   const switchBoard = (boardId: string) => {
     setOpen(false);
+    setLastBoardCookie(boardId);
     router.push(`/?boardId=${boardId}`);
   };
 

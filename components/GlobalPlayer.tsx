@@ -27,6 +27,7 @@ export default function GlobalPlayer() {
     playPrevious,
     playlist,
   } = useAudio();
+
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Hitta nästa låt i listan
@@ -62,6 +63,8 @@ export default function GlobalPlayer() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [progress, duration, seek, togglePlay]);
+
+  if (!currentTrack) return null;
 
   // Om ingen låt är vald, dölj spelaren helt
   if (!currentTrack) return null;

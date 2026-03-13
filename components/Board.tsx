@@ -18,8 +18,8 @@ import {
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { FullBoard } from '@/types';
 import { SortableTrack } from './SortableTrack';
@@ -91,6 +91,7 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
+    document.body.style.cursor = 'grabbing';
   };
 
   // Live preview while dragging – moves card optimistically so there's no flicker
@@ -145,6 +146,8 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
+    document.body.style.cursor = '';
+
     const { active, over } = event;
     setActiveId(null);
 
@@ -206,6 +209,10 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
       onDragOver={handleDragOver}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      onDragCancel={() => {
+        document.body.style.cursor = '';
+        setActiveId(null);
+      }}
     >
       <div className='flex gap-8 h-full items-start'>
         {board.lists.map((stage) => (

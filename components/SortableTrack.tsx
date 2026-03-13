@@ -1,7 +1,8 @@
 'use client';
+import { useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { AudioTrack } from '@/context/AudioContext';
+import { AudioTrack, useAudio } from '@/context/AudioContext';
 import TrackCard from './TrackCard';
 
 function mapToAudioTrack(track: AudioTrack): AudioTrack {
@@ -9,8 +10,8 @@ function mapToAudioTrack(track: AudioTrack): AudioTrack {
 }
 
 interface SortableTrackProps {
-  track: AudioTrack; // Ändra från Track till AudioTrack
-  allTracksInColumn: AudioTrack[]; // Ändra här också
+  track: AudioTrack;
+  allTracksInColumn: AudioTrack[];
 }
 
 export function SortableTrack({
@@ -19,6 +20,16 @@ export function SortableTrack({
 }: SortableTrackProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useSortable({ id: track.id });
+
+  const {
+    currentTrack,
+    togglePlay,
+    playTrack,
+    setPlaylist,
+    setSelectedTrackId,
+  } = useAudio();
+
+  const divRef = useRef<HTMLDivElement>(null);
 
   const audioTrack = mapToAudioTrack(track);
   const audioColumn = allTracksInColumn.map(mapToAudioTrack);
@@ -29,17 +40,85 @@ export function SortableTrack({
     opacity: isDragging ? 0 : 1, // Helt osynlig – bara en tom plats kvar
   };
 
+  /*   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation(); // Stoppar dnd-kit från att fånga space
+
+      const isActive = currentTrack?.id === track.id;
+      if (isActive) {
+        togglePlay();
+      } else if (track.audioUrl) {
+        const playableTracks = allTracksInColumn
+          .filter((t) => t.audioUrl)
+          .map((t) => ({
+            id: t.id,
+            title: t.title,
+            bpm: t.bpm,
+            key: t.key,
+            audioUrl: t.audioUrl,
+          }));
+        setPlaylist(playableTracks);
+        playTrack({
+          id: track.id,
+          title: track.title,
+          bpm: track.bpm,
+          key: track.key,
+          audioUrl: track.audioUrl,
+        });
+      }
+    }
+  }; */
+
+  const { onKeyDown: dndKeyDown, ...restListeners } = listeners ?? {};
+
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setNodeRef(node);
+        (divRef as React.MutableRefObject<HTMLDivElement | null>).current =
+          node;
+      }}
       style={style}
-      className={`touch-none outline-none ${isDragging ? 'z-50 relative' : ''}`}
+      className={`touch-none outline-none focus:outline-none ${isDragging ? 'z-50 relative' : ''}`}
+      onClick={() => {
+        setSelectedTrackId(track.id);
+        divRef.current?.focus();
+      }}
+      {...attributes}
+      {...restListeners}
+      onKeyDown={(e) => {
+        if (e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          const isActive = currentTrack?.id === track.id;
+          if (isActive) {
+            togglePlay();
+          } else if (track.audioUrl) {
+            const playableTracks = allTracksInColumn
+              .filter((t) => t.audioUrl)
+              .map((t) => ({
+                id: t.id,
+                title: t.title,
+                bpm: t.bpm,
+                key: t.key,
+                audioUrl: t.audioUrl,
+              }));
+            setPlaylist(playableTracks);
+            playTrack({
+              id: track.id,
+              title: track.title,
+              bpm: track.bpm,
+              key: track.key,
+              audioUrl: track.audioUrl,
+            });
+          }
+          return;
+        }
+        dndKeyDown?.(e);
+      }}
     >
-      <div
-        {...attributes}
-        {...listeners}
-        className='cursor-grab active:cursor-grabbing'
-      >
+      <div className='cursor-grab active:cursor-grabbing'>
         <TrackCard
           id={audioTrack.id}
           title={audioTrack.title}

@@ -34,6 +34,8 @@ const TrackCard = memo(
     const [showMenu, setShowMenu] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [isUploadOpen, setIsUploadOpen] = useState(false);
+    const { selectedTrackId } = useAudio();
+    const isSelected = selectedTrackId === id;
 
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -152,12 +154,42 @@ const TrackCard = memo(
     }
 
     return (
-      <div className='bg-card border border-white/5 rounded-md p-4 shadow-xl hover:border-accent/40 transition-[border-color,transform] duration-200 group relative overflow-hidden select-none'>
-        <div className='absolute left-0 top-0 bottom-0 w-1 bg-accent/20 group-hover:bg-accent transition-colors duration-200' />
+      <div
+        className={`bg-card border rounded-md p-4 shadow-xl transition-[border-color,box-shadow] duration-200 group relative overflow-hidden select-none
+  ${
+    isActive
+      ? 'border-accent/60 shadow-accent/20 shadow-lg'
+      : isSelected
+        ? 'border-accent/50'
+        : 'border-white/5 hover:border-accent/50'
+  }`}
+      >
+        <div
+          className={`absolute left-0 top-0 bottom-0 w-1 transition-colors duration-200
+          ${isActive ? 'bg-accent' : isSelected ? 'bg-accent/70' : 'bg-accent/20 group-hover:bg-accent/50'}`}
+        />
 
         <div className='flex justify-between items-start mb-4'>
-          <div className='p-2 bg-accent/10 rounded border border-accent/20'>
-            <Music className='w-4 h-4 text-accent' />
+          <div className='flex items-center gap-2'>
+            <div className='p-2 bg-accent/10 rounded border border-accent/20'>
+              <Music className='w-4 h-4 text-accent' />
+            </div>
+
+            {/* Play Symbol som visar vilket track som är aktivt */}
+            {isActive && (
+              <div className='relative flex items-center text-accent justify-center opacity-70'>
+                <Play
+                  size={14}
+                  fill='currentColor'
+                  className='absolute animate-ping text-accent opacity-25'
+                />
+                <Play
+                  size={14}
+                  fill='currentColor'
+                  className='relative text-accent'
+                />
+              </div>
+            )}
           </div>
 
           <div className='relative' ref={menuRef}>
@@ -253,9 +285,6 @@ const TrackCard = memo(
     );
   },
   (prevProps, nextProps) => {
-    // 2. LOGIKEN: Returnera true om komponenten INTE ska rendera om.
-    // Vi vill bara rendera om ifall ID, titel, bpm eller key ändras (från DB-uppdateringar).
-    // Vi ignorerar att 'currentTrack' eller 'progress' ändras i contexten.
     return (
       prevProps.id === nextProps.id &&
       prevProps.title === nextProps.title &&
