@@ -74,6 +74,8 @@ export function SortableTrack({
 
   return (
     <div
+      data-track-card
+      data-track-id={track.id}
       ref={(node) => {
         setNodeRef(node);
         (divRef as React.MutableRefObject<HTMLDivElement | null>).current =

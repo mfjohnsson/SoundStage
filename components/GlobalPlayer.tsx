@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useAudio } from '@/context/AudioContext';
 import {
   Play,
@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import Waveform from './Waveform';
 
 export default function GlobalPlayer() {
   const {
@@ -26,9 +27,10 @@ export default function GlobalPlayer() {
     playNext,
     playPrevious,
     playlist,
+    isPlayerCollapsed,
+    setIsPlayerCollapsed,
+    selectedTrackId,
   } = useAudio();
-
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Hitta nästa låt i listan
   const currentIndex = playlist.findIndex((t) => t.id === currentTrack?.id);
@@ -54,16 +56,20 @@ export default function GlobalPlayer() {
         seek(Math.max(progress - 5, 0));
       }
       if (e.key === ' ') {
-        // Space för Play/Pause är också nice!
         e.preventDefault();
         togglePlay();
+        if (selectedTrackId) {
+          const el = document.querySelector(
+            `[data-track-id="${selectedTrackId}"]`,
+          ) as HTMLElement;
+          el?.focus();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [progress, duration, seek, togglePlay]);
-
+  }, [progress, duration, seek, togglePlay, selectedTrackId]);
   if (!currentTrack) return null;
 
   // Om ingen låt är vald, dölj spelaren helt
@@ -78,17 +84,17 @@ export default function GlobalPlayer() {
   return (
     <div
       className={`fixed bottom-0 left-0 right-0 bg-zinc-950/90 backdrop-blur-lg border-t border-white/5 z-100 transition-transform duration-300 ease-in-out ${
-        isCollapsed ? 'translate-y-full' : 'translate-y-0'
+        isPlayerCollapsed ? 'translate-y-full' : 'translate-y-0'
       }`}
     >
       {/* Kontrollknapp för att fälla upp/ner */}
       <div className='absolute -top-8 right-8'>
         <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={() => setIsPlayerCollapsed(!isPlayerCollapsed)}
           className='bg-zinc-950/90 border border-white/5 border-b-0 py-2 px-3 rounded-t-lg text-zinc-400 hover:text-accent transition-colors flex items-center gap-2 text-[10px] uppercase font-black tracking-widest'
         >
           {/* Pulserande playknapp om musik spelas */}
-          {isPlaying && isCollapsed && (
+          {isPlaying && isPlayerCollapsed && (
             <div className='relative flex items-center justify-center w-5 h-5'>
               {/* Den pulserande effekten bakom */}
               <Play
@@ -105,7 +111,7 @@ export default function GlobalPlayer() {
             </div>
           )}
 
-          {isCollapsed ? (
+          {isPlayerCollapsed ? (
             <>
               <ChevronUp size={14} /> Show Player
             </>
@@ -185,22 +191,14 @@ export default function GlobalPlayer() {
             <span className='text-[10px] text-zinc-500 font-mono w-10 text-right'>
               {formatTime(progress)}
             </span>
-            <input
-              type='range'
-              min={0}
-              max={duration || 0}
-              value={progress}
-              onChange={(e) => seek(Number(e.target.value))}
-              className='flex-1 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer'
-              style={{
-                // Vi räknar ut hur många procent av låten som har spelats
-                background: `linear-gradient(to right, #ff5722 0%, #ff5722 ${
-                  duration ? (progress / duration) * 100 : 0
-                }%, #27272a ${
-                  duration ? (progress / duration) * 100 : 0
-                }%, #27272a 100%)`,
-              }}
-            />
+            <div className='flex-1'>
+              <Waveform
+                audioUrl={currentTrack.audioUrl ?? ''}
+                progress={progress}
+                duration={duration}
+                onSeek={seek}
+              />
+            </div>
             <span className='text-[10px] text-zinc-500 font-mono w-10'>
               {formatTime(duration)}
             </span>

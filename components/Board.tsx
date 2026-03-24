@@ -34,8 +34,87 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
   const [mounted, setMounted] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const { currentTrack, setPlaylist } = useAudio();
+  const { selectedTrackId, setSelectedTrackId } = useAudio();
 
-  // Keep a ref to the latest board so async handlers read fresh data
+  // Ser till att piltangenterna fungerar som navigation mellan tracks
+  useEffect(() => {
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        console.log(
+          'Board keydown:',
+          e.key,
+          'selectedTrackId:',
+          selectedTrackId,
+          'focus:',
+          document.activeElement,
+        );
+      },
+      true,
+    );
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
+
+      // Blockera scroll när ett kort är valt
+      if (selectedTrackId && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+
+        const currentList = board.lists.find((l) =>
+          l.tracks.some((t) => t.id === selectedTrackId),
+        );
+        if (!currentList) return;
+
+        const currentIndex = currentList.tracks.findIndex(
+          (t) => t.id === selectedTrackId,
+        );
+        let newId: string | null = null;
+
+        if (e.key === 'ArrowUp' && currentIndex > 0) {
+          newId = currentList.tracks[currentIndex - 1].id;
+        }
+        if (
+          e.key === 'ArrowDown' &&
+          currentIndex < currentList.tracks.length - 1
+        ) {
+          newId = currentList.tracks[currentIndex + 1].id;
+        }
+
+        if (newId) {
+          setSelectedTrackId(newId);
+          setTimeout(() => {
+            const el = document.querySelector(
+              `[data-track-id="${newId}"]`,
+            ) as HTMLElement;
+            el?.focus();
+          }, 0);
+        }
+      }
+    };
+
+    // Viktigt: useCapture = true så vi fångar händelsen INNAN browsern hinner scrolla
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [board, selectedTrackId, setSelectedTrackId]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      // Kolla om klicket skedde på ett track-kort
+      const clickedCard = (e.target as HTMLElement).closest(
+        '[data-track-card]',
+      );
+      if (!clickedCard) {
+        setSelectedTrackId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [setSelectedTrackId]);
+
   const boardRef = useRef(board);
   useEffect(() => {
     boardRef.current = board;
@@ -94,7 +173,6 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
     document.body.style.cursor = 'grabbing';
   };
 
-  // Live preview while dragging – moves card optimistically so there's no flicker
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
     if (!over) return;
@@ -197,7 +275,6 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
     }
   };
 
-  // Find the active track for the DragOverlay
   const activeTrack = activeId
     ? board.lists.flatMap((l) => l.tracks).find((t) => t.id === activeId)
     : null;

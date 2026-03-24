@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
-import Board from '@/components/Board';
 import Navbar from '@/components/Navbar';
+import MainContent from '@/components/MainContent';
 import { FullBoard } from '@/types';
 import { cookies } from 'next/headers';
 
@@ -34,9 +34,7 @@ export default async function Home({
   return (
     <div className='flex flex-col min-h-screen bg-background text-foreground font-sans'>
       <Navbar boards={boards} activeBoard={activeBoard} />
-      <main className='flex-1 p-8 overflow-x-auto'>
-        <Board initialData={activeBoard as FullBoard} />
-      </main>
+      <MainContent activeBoard={activeBoard as FullBoard} />
     </div>
   );
 }

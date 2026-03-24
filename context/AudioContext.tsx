@@ -49,6 +49,8 @@ interface AudioContextType {
   playPrevious: () => void;
   selectedTrackId: string | null;
   setSelectedTrackId: (id: string | null) => void;
+  isPlayerCollapsed: boolean;
+  setIsPlayerCollapsed: (collapsed: boolean) => void;
 }
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
@@ -61,6 +63,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
+  const [isPlayerCollapsed, setIsPlayerCollapsed] = useState(false);
 
   // Själva ljudmotorn som lever under hela sessionen
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -104,7 +107,6 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       }
 
       audioRef.current.play();
-      setSelectedTrackId(null);
       setIsPlaying(true);
       navigator.mediaSession.playbackState = 'playing';
     },
@@ -230,6 +232,8 @@ export function AudioProvider({ children }: { children: ReactNode }) {
         playPrevious,
         selectedTrackId,
         setSelectedTrackId,
+        isPlayerCollapsed,
+        setIsPlayerCollapsed,
       }}
     >
       {children}
