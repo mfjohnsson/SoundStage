@@ -2,7 +2,7 @@
 
 import { createTrack, uploadAudio } from '@/actions/tracks';
 import { X, Loader2 } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useFormStatus } from 'react-dom'; // Importera denna för stabil laddningsstatus
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
@@ -83,6 +83,9 @@ export default function UploadTrackModal({ stageId, trackId, onClose }: Props) {
       const key = formData.get('key');
       if (bpm) payload.append('bpm', bpm as string);
       if (key) payload.append('key', key as string);
+      if (audioUrl) {
+        payload.append('audioUrl', audioUrl); // Skicka BARA strängen/länken
+      }
 
       // 3. Kör Server Action med URL istället för fil
       const result = trackId
