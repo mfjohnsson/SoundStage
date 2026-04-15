@@ -5,6 +5,7 @@ import { X, Loader2 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useFormStatus } from 'react-dom'; // Importera denna för stabil laddningsstatus
 import { createPortal } from 'react-dom';
+import { supabase } from '@/lib/supabase';
 
 interface Props {
   stageId?: string;
@@ -38,29 +39,65 @@ export default function UploadTrackModal({ stageId, trackId, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [onClose]);
-
   async function clientAction(formData: FormData) {
     setError(null);
+    const audioFile = formData.get('audio') as File;
+    let audioUrl = null;
+
     try {
+      // 1. Om en fil har valts, ladda upp den direkt till Supabase från webbläsaren
+      if (audioFile && audioFile.size > 0) {
+        // Kontrollera storlek (valfritt men bra)
+        if (audioFile.size > 10 * 1024 * 1024) {
+          // 10MB gräns
+          setError('Filen är för stor (max 10MB)');
+          return;
+        }
+
+        const fileName = `${Date.now()}-${audioFile.name}`;
+        const { data, error: uploadError } = await supabase.storage
+          .from('audio-tracks')
+          .upload(fileName, audioFile);
+
+        if (uploadError) throw uploadError;
+
+        // Hämta den publika URL:en
+        const { data: urlData } = supabase.storage
+          .from('audio-tracks')
+          .getPublicUrl(data.path);
+
+        audioUrl = urlData.publicUrl;
+      }
+
+      // 2. Förbered data för Server Action (utan den tunga filen)
+      // Vi skickar URL:en istället för File-objektet
+      const payload = new FormData();
+      if (stageId) payload.append('stageId', stageId);
+      if (trackId) payload.append('trackId', trackId);
+      if (audioUrl) payload.append('audioUrl', audioUrl); // Skicka URL:en här
+
+      const title = formData.get('title');
+      if (title) payload.append('title', title as string);
+
+      const bpm = formData.get('bpm');
+      const key = formData.get('key');
+      if (bpm) payload.append('bpm', bpm as string);
+      if (key) payload.append('key', key as string);
+
+      // 3. Kör Server Action med URL istället för fil
       const result = trackId
-        ? await uploadAudio(trackId, formData)
-        : await createTrack(formData);
+        ? await uploadAudio(trackId, payload) // Du kan behöva justera uploadAudio att ta emot en URL istället för File
+        : await createTrack(payload);
 
       if (result.success) {
         onClose();
       } else {
-        setError(result.error || 'Något gick fel vid uppladdningen.');
+        setError(result.error || 'Något gick fel vid sparandet.');
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      setError('Ett oväntat fel uppstod på servern.');
+      const errorMessage = err instanceof Error ? err.message : 'Ett oväntat fel uppstod.';
+      setError(errorMessage);
     }
   }
 

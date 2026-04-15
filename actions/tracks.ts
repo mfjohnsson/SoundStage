@@ -1,7 +1,6 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 
 export async function createTrack(
@@ -10,32 +9,12 @@ export async function createTrack(
   try {
     const title = formData.get('title') as string;
     const stageId = formData.get('stageId') as string;
+    const key = formData.get('key') as string;
+    const audioUrl = formData.get('audioUrl') as string | null; // Nu en sträng, inte File
+
     const bpm = formData.get('bpm')
       ? parseInt(formData.get('bpm') as string)
       : null;
-    const key = formData.get('key') as string;
-    const audioFile = formData.get('audio') as File | null;
-
-    let publicUrl = null;
-
-    // Vi kollar om en fil faktiskt valdes genom att kontrollera storleken
-    if (audioFile && audioFile.size > 0) {
-      const fileExtension = audioFile.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExtension}`;
-      const filePath = `${stageId}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('tracks')
-        .upload(filePath, audioFile);
-
-      if (uploadError) {
-        console.error('Supabase Error:', uploadError.message);
-        return { success: false, error: 'Kunde inte ladda upp filen.' };
-      }
-
-      const { data } = supabase.storage.from('tracks').getPublicUrl(filePath);
-      publicUrl = data.publicUrl;
-    }
 
     const trackCount = await db.track.count({ where: { stageId } });
 
@@ -46,7 +25,7 @@ export async function createTrack(
         bpm,
         key,
         order: trackCount,
-        audioUrl: publicUrl, // Sparas som null om ingen fil laddades upp
+        audioUrl: audioUrl, // Spara URL:en vi fick från klienten
       },
     });
 
@@ -57,7 +36,6 @@ export async function createTrack(
     return { success: false, error: 'Ett fel uppstod i databasen.' };
   }
 }
-
 export async function updateTrackPosition(trackId: string, newStageId: string) {
   try {
     await db.track.update({
@@ -117,26 +95,24 @@ export async function updateTracksOrder(
 }
 
 export async function uploadAudio(trackId: string, formData: FormData) {
-  const file = formData.get('audio') as File;
-  if (!file) return { error: 'Ingen fil vald' };
+  // Nu är 'audioUrl' bara en vanlig textsträng (URL:en från Supabase)
+  const audioUrl = formData.get('audioUrl') as string;
 
-  const fileName = `${trackId}-${Date.now()}`;
+  if (!audioUrl) return { error: 'Ingen URL mottogs' };
 
-  const { data, error } = await supabase.storage
-    .from('tracks')
-    .upload(fileName, file);
+  try {
+    await db.track.update({
+      where: { id: trackId },
+      data: { audioUrl: audioUrl },
+    });
 
-  if (error) return { error: error.message };
-
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from('tracks').getPublicUrl(data.path);
-
-  await db.track.update({
-    where: { id: trackId },
-    data: { audioUrl: publicUrl },
-  });
-
-  revalidatePath('/');
-  return { success: true };
+    revalidatePath('/');
+    return { success: true };
+  } catch (error) {
+    console.error('Database Error:', error);
+    return {
+      success: false,
+      error: 'Kunde inte uppdatera spåret i databasen.',
+    };
+  }
 }
