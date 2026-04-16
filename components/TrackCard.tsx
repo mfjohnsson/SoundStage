@@ -3,6 +3,7 @@
 'use client';
 
 import { useEffect, useState, useRef, memo } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Upload,
   MoreVertical,
@@ -38,6 +39,7 @@ const TrackCard = memo(
     const isSelected = selectedTrackId === id;
 
     const menuRef = useRef<HTMLDivElement>(null);
+    const router = useRouter();
 
     // Stäng menyn vid klick utanför
     useEffect(() => {
@@ -65,6 +67,7 @@ const TrackCard = memo(
       await updateTrack(id, formData);
       setIsEditing(false);
       setShowMenu(false);
+      router.refresh();
     };
 
     const { playTrack, currentTrack, setPlaylist, isPlaying, togglePlay } =
@@ -230,7 +233,14 @@ const TrackCard = memo(
                 <button
                   className='w-full flex items-center gap-2 px-3 py-2 text-[10px] text-red-400 hover:bg-red-500/10 transition-colors border-t border-white/5'
                   onClick={async () => {
-                    if (confirm('Är du säker?')) await deleteTrack(id);
+                    if (confirm('Är du säker?')) {
+                      const result = await deleteTrack(id);
+                      if (result.success) {
+                        router.refresh(); 
+                      } else {
+                        alert('Kunde inte radera: ' + result.error);
+                      }
+                    }
                   }}
                 >
                   <Trash2 className='w-3 h-3' /> DELETE

@@ -2,6 +2,7 @@
 
 import { db } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export async function createTrack(
   formData: FormData,
@@ -48,12 +49,42 @@ export async function updateTrackPosition(trackId: string, newStageId: string) {
   }
 }
 
-export async function deleteTrack(id: string) {
-  await db.track.delete({
-    where: { id },
-  });
+export async function deleteTrack(trackId: string) {
 
-  revalidatePath('/');
+  if (!supabaseAdmin) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY saknas i miljövariablerna!');
+  }
+
+  try {
+    const track = await db.track.findUnique({
+      where: { id: trackId },
+    });
+
+    if (track?.audioUrl) {
+      const fileName = decodeURIComponent(track.audioUrl.split('/').pop() || '');
+
+      if (fileName) {
+        // Vi använder supabaseAdmin här – den har "Gud-rättigheter" och ignorerar RLS
+        const { data, error: storageError } = await supabaseAdmin.storage
+          .from('tracks')
+          .remove([fileName]);
+
+        if (storageError) {
+          console.error('Admin Storage Error:', storageError);
+        } else {
+          console.log("Radering bekräftad av Admin:", data);
+        }
+      }
+    }
+
+    await db.track.delete({ where: { id: trackId } });
+
+    revalidatePath('/');
+    return { success: true };
+  } catch (error) {
+    console.error('Delete error:', error);
+    return { success: false, error: 'Kunde inte radera' };
+  }
 }
 
 export async function updateTrack(id: string, formData: FormData) {

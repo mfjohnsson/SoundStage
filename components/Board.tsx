@@ -28,6 +28,7 @@ import { useAudio } from '@/context/AudioContext';
 import AddTrack from './AddTrack';
 import TrackCard from './TrackCard';
 import DroppableZone from './DroppableZone';
+import UploadTrackModal from './UploadTrackModal';
 
 export default function Board({ initialData }: { initialData: FullBoard }) {
   const [board, setBoard] = useState(initialData);
@@ -35,6 +36,15 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const { currentTrack, setPlaylist } = useAudio();
   const { selectedTrackId, setSelectedTrackId } = useAudio();
+  const [preloadedFile, setPreloadedFile] = useState<File | null>(null);
+  const [activeStageId, setActiveStageId] = useState<string | null>(null);
+  const [isExternalModalOpen, setIsExternalModalOpen] = useState(false);
+
+  const handleFileDrop = (file: File, stageId: string) => {
+    setPreloadedFile(file);
+    setActiveStageId(stageId);
+    setIsExternalModalOpen(true);
+  };
 
   // Ser till att piltangenterna fungerar som navigation mellan tracks
   useEffect(() => {
@@ -311,7 +321,11 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
               items={stage.tracks.map((t) => t.id)}
               strategy={verticalListSortingStrategy}
             >
-              <DroppableZone id={stage.id} tracksCount={stage.tracks.length}>
+              <DroppableZone
+                id={stage.id}
+                tracksCount={stage.tracks.length}
+                onFileDrop={handleFileDrop}
+              >
                 {stage.tracks.map((track) => (
                   <SortableTrack
                     key={track.id}
@@ -343,6 +357,18 @@ export default function Board({ initialData }: { initialData: FullBoard }) {
           </div>
         ) : null}
       </DragOverlay>
+      {/* Board.tsx längst ner */}
+      {isExternalModalOpen && (
+        <UploadTrackModal
+          stageId={activeStageId!}
+          initialFile={preloadedFile}
+          onClose={() => {
+            setIsExternalModalOpen(false);
+            setPreloadedFile(null);
+            setActiveStageId(null);
+          }}
+        />
+      )}
     </DndContext>
   );
 }
