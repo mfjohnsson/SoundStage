@@ -44,64 +44,69 @@ export default function UploadTrackModal({ stageId, trackId, onClose }: Props) {
     const audioFile = formData.get('audio') as File;
     let audioUrl = null;
 
-    try {
-      // 1. Om en fil har valts, ladda upp den direkt till Supabase från webbläsaren
-      if (audioFile && audioFile.size > 0) {
-        // Kontrollera storlek (valfritt men bra)
-        if (audioFile.size > 10 * 1024 * 1024) {
-          // 10MB gräns
-          setError('Filen är för stor (max 10MB)');
-          return;
-        }
+ try {
+   if (audioFile && audioFile.size > 0) {
+     // 1. Storlekskontroll (10MB)
+     if (audioFile.size > 50 * 1024 * 1024) {
+       setError('Filen är för stor (max 50MB)');
+       return;
+     }
 
-        const fileName = `${Date.now()}-${audioFile.name}`;
-        const { data, error: uploadError } = await supabase.storage
-          .from('audio-tracks')
-          .upload(fileName, audioFile);
+     // 2. Skapa ett snyggt och unikt filnamn
+     // Vi tar bort konstiga tecken och mellanslag för att inte irritera Storage
+     const cleanName = audioFile.name.replace(/[^a-zA-Z0-9.]/g, '_');
+     const fileName = `${Date.now()}-${cleanName}`;
 
-        if (uploadError) throw uploadError;
+     // 3. Ladda upp till rätt bucket (stämmer det att den heter 'tracks'?)
+     // Enligt din bild heter bucketen 'tracks'
+     const { error: uploadError } = await supabase.storage
+       .from('tracks')
+       .upload(fileName, audioFile);
 
-        // Hämta den publika URL:en
-        const { data: urlData } = supabase.storage
-          .from('audio-tracks')
-          .getPublicUrl(data.path);
+     if (uploadError) throw uploadError;
 
-        audioUrl = urlData.publicUrl;
-      }
+     // 4. Hämta den publika URL:en med det nya namnet
+     const { data: urlData } = supabase.storage
+       .from('tracks')
+       .getPublicUrl(fileName);
 
-      // 2. Förbered data för Server Action (utan den tunga filen)
-      // Vi skickar URL:en istället för File-objektet
-      const payload = new FormData();
-      if (stageId) payload.append('stageId', stageId);
-      if (trackId) payload.append('trackId', trackId);
-      if (audioUrl) payload.append('audioUrl', audioUrl); // Skicka URL:en här
+     audioUrl = urlData.publicUrl;
+   }
 
-      const title = formData.get('title');
-      if (title) payload.append('title', title as string);
+   // 2. Förbered data för Server Action (utan den tunga filen)
+   // Vi skickar URL:en istället för File-objektet
+   const payload = new FormData();
+   if (stageId) payload.append('stageId', stageId);
+   if (trackId) payload.append('trackId', trackId);
+   if (audioUrl) payload.append('audioUrl', audioUrl); // Skicka URL:en här
 
-      const bpm = formData.get('bpm');
-      const key = formData.get('key');
-      if (bpm) payload.append('bpm', bpm as string);
-      if (key) payload.append('key', key as string);
-      if (audioUrl) {
-        payload.append('audioUrl', audioUrl); // Skicka BARA strängen/länken
-      }
+   const title = formData.get('title');
+   if (title) payload.append('title', title as string);
 
-      // 3. Kör Server Action med URL istället för fil
-      const result = trackId
-        ? await uploadAudio(trackId, payload) // Du kan behöva justera uploadAudio att ta emot en URL istället för File
-        : await createTrack(payload);
+   const bpm = formData.get('bpm');
+   const key = formData.get('key');
+   if (bpm) payload.append('bpm', bpm as string);
+   if (key) payload.append('key', key as string);
+   if (audioUrl) {
+     payload.append('audioUrl', audioUrl); // Skicka BARA strängen/länken
+   }
 
-      if (result.success) {
-        onClose();
-      } else {
-        setError(result.error || 'Något gick fel vid sparandet.');
-      }
-    } catch (err: unknown) {
-      console.error(err);
-      const errorMessage = err instanceof Error ? err.message : 'Ett oväntat fel uppstod.';
-      setError(errorMessage);
-    }
+   // 3. Kör Server Action med URL istället för fil
+   const result = trackId
+     ? await uploadAudio(trackId, payload) // Du kan behöva justera uploadAudio att ta emot en URL istället för File
+     : await createTrack(payload);
+
+   if (result.success) {
+     onClose();
+   } else {
+     setError(result.error || 'Något gick fel vid sparandet.');
+   }
+ } catch (err: unknown) {
+   console.error(err);
+   const errorMessage =
+     err instanceof Error ? err.message : 'Ett oväntat fel uppstod.';
+   setError(errorMessage);
+ }
   }
 
   return createPortal(
